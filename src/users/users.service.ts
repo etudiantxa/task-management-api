@@ -17,7 +17,8 @@ export class UsersService {
   }
 
   async create(user: RegisterRequestDto) {
-    const findUser = this.findOne(user.username);
+    const  findUser =  await this.findOne(user.username);
+
     if (findUser != undefined || findUser != null) {
       throw new BadRequestException(
         'A user with the username ' + user.username + ' already exists',
