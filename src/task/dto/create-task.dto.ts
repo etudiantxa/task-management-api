@@ -6,6 +6,14 @@ export enum Priority {
   Low = 'Low',
 }
 
+export enum Status {
+  Todo = 'Todo',
+  InProgress = 'InProgress',
+  Completed = 'Completed',
+  Pending = 'Pending',
+  Cancelled = 'Cancelled',
+}
+
 export class CreateTaskDto {
   @ApiProperty({
     example: 'title',
@@ -24,6 +32,13 @@ export class CreateTaskDto {
     required: true,
   })
   color: string;
+
+  @ApiProperty({
+    example: 'Todo',
+    enum: Status,
+    required: false,
+  })
+  status?: Status;
 
   @ApiProperty({
     type: Date,

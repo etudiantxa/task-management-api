@@ -7,6 +7,7 @@ import {
   Headers,
   Put,
   Get,
+  Delete,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginRequest } from './dtos/login-request.dt';
@@ -14,11 +15,21 @@ import { Public } from 'src/public.decorator';
 import { RegisterRequestDto } from './dtos/register-request.dto';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UpdateUserRequestDto } from './dtos/update-auth-request.dto';
+import {
+  ForgotPasswordDto,
+  ResetPasswordDto,
+} from './dtos/forgot-reset-password.dto';
 
 @ApiTags('Auth')
 @Controller('auths')
 export class AuthController {
   constructor(private authService: AuthService) {}
+
+  @Post('google')
+  @Public()
+  async googleAuth(@Body('idToken') idToken: string) {
+    return this.authService.googleLogin(idToken);
+  }
 
   @HttpCode(HttpStatus.OK)
   @Post('login')
@@ -34,7 +45,7 @@ export class AuthController {
     return this.authService.register(user);
   }
 
-  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
   @Post('refresh')
   async refresh(@Headers('Authorization') auth: string) {
     const jwt = auth.replace('Bearer ', '');
@@ -53,10 +64,27 @@ export class AuthController {
 
   @ApiBearerAuth()
   @Get('profils')
-  getUser(
-    @Headers('Authorization') auth: string,
-  ) {
+  getUser(@Headers('Authorization') auth: string) {
     const jwt = auth.replace('Bearer ', '');
     return this.authService.getUser(jwt);
+  }
+
+  @Post('forgot-password')
+  @Public()
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Post('reset-password')
+  @Public()
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
+  }
+
+  // Endpoint temporaire pour récupérer le dernier jeton de réinitialisation (uniquement pour les tests)
+  @Get('test/get-last-reset-token')
+  @Public()
+  getLastResetToken() {
+    return { token: this.authService.getLastResetToken() };
   }
 }

@@ -1,5 +1,5 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { CreateTaskDto, Priority } from './create-task.dto';
+import { CreateTaskDto, Priority, Status } from './create-task.dto';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateTaskDto extends PartialType(CreateTaskDto) {
@@ -20,6 +20,8 @@ export class UpdateTaskDto extends PartialType(CreateTaskDto) {
     required: false,
   })
   color?: string;
+  @ApiProperty({ example: 'Todo', required: false, enum: Status })
+  status?: Status;
   @ApiProperty({
     type: Date,
     required: false,

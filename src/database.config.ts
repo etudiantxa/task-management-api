@@ -2,7 +2,7 @@ import { SequelizeModuleOptions } from '@nestjs/sequelize';
 
 export const dataBaseConfig: SequelizeModuleOptions = {
   dialect: 'sqlite',
-  storage: '.db/data.sqlite3',
+  storage: process.env.DB_STORAGE || '.db/data.sqlite3',
   autoLoadModels: true,
-  synchronize: true,
+  synchronize: process.env.NODE_ENV !== 'production', // Ne pas synchroniser en production
 };

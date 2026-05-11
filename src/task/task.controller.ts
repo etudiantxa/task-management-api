@@ -5,60 +5,65 @@ import {
   Body,
   Patch,
   Param,
-  Headers,
   Delete,
+  UseGuards,
+  Req,
+  Query,
 } from '@nestjs/common';
 import { TaskService } from './task.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
-import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Task } from './entities/task.entity';
+import { AuthGuard } from '@nestjs/passport';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 @ApiBearerAuth()
 @ApiTags('Task')
+@UseGuards(AuthGuard('jwt')) // 🔥 protège tout le controller
 @Controller('task')
 export class TaskController {
   constructor(private readonly taskService: TaskService) {}
 
   @Post()
-  @ApiResponse({
-    status: 201,
-    description: 'The record has been successfully created.',
-    type: Task,
-  })
-  create(
-    @Headers('Authorization') auth: string,
-    @Body() createTaskDto: CreateTaskDto,
-  ) {
-    const jwt = auth.replace('Bearer ', '');
-    return this.taskService.create(jwt, createTaskDto);
+  create(@Req() req, @Body() createTaskDto: CreateTaskDto) {
+    return this.taskService.create(req.user, createTaskDto);
   }
 
+  // ✨ PAGINATION + FILTRAGE + RECHERCHE
   @Get()
-  findAll(@Headers('Authorization') auth: string) {
-    const jwt = auth.replace('Bearer ', '');
-    return this.taskService.findAll(jwt);
+  findAll(
+    @Req() req,
+    @Query('priority') priority?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const pageLimit = limit ? parseInt(limit) : 10; // Default 10
+    const pageOffset = offset ? parseInt(offset) : 0; // Default 0
+    return this.taskService.findAll(req.user, priority, status, pageLimit, pageOffset);
+  }
+
+  // ✨ RECHERCHE PAR TITRE (doit être AVANT @Get(':id'))
+  @Get('search/:query')
+  search(@Req() req, @Param('query') query: string) {
+    return this.taskService.search(req.user, query);
   }
 
   @Get(':id')
-  findOne(@Headers('Authorization') auth: string, @Param('id') id: string) {
-    const jwt = auth.replace('Bearer ', '');
-    return this.taskService.findOne(jwt, +id);
+  findOne(@Req() req, @Param('id') id: string) {
+    return this.taskService.findOne(+id, req.user.sub);
   }
 
   @Patch(':id')
   update(
-    @Headers('Authorization') auth: string,
+    @Req() req,
     @Param('id') id: string,
     @Body() updateTaskDto: UpdateTaskDto,
   ) {
-    const jwt = auth.replace('Bearer ', '');
-    return this.taskService.update(jwt, +id, updateTaskDto);
+    return this.taskService.update(+id, req.user.sub, updateTaskDto);
   }
 
   @Delete(':id')
-  remove(@Headers('Authorization') auth: string, @Param('id') id: string) {
-    const jwt = auth.replace('Bearer ', '');
-    return this.taskService.remove(jwt, +id);
+  remove(@Req() req, @Param('id') id: string) {
+    return this.taskService.remove(+id, req.user.sub);
   }
 }

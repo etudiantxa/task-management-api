@@ -27,6 +27,13 @@ npm install
 npx sequelize-cli db:migrate
 ```
 
+## 5. Configuration des variables d'environnement
+Copiez le fichier `.env.example` et nommez-le `.env`, puis mettez à jour les valeurs selon votre configuration :
+
+```bash
+cp .env.example .env
+```
+
 # Exécution du Projet
 1. Démarrez le serveur NestJS :
 ```bash
@@ -115,15 +122,30 @@ class UpdateTaskDto {
   title: string;
   // description de la tache
   // non requise
-  content: string;
-  // priorité de la tache
-  // non requise
-  priority: string;
-  // couleur de la tache
-  // non requise
-  color: string;
-  // date de la tache
-  // non requise
-  dueDate: Date;
-}
-```
+
+# Déploiement et Sécurité
+
+## Variables d'environnement critiques
+
+Pour un déploiement sécurisé, assurez-vous de définir les variables d'environnement suivantes :
+
+- `NODE_ENV`: 'production' pour l'environnement de production
+- `JWT_SECRET`: Une chaîne complexe pour signer les tokens JWT
+- `DB_STORAGE`: Chemin vers votre fichier SQLite en production
+- `CORS_ALLOWED_ORIGINS`: Liste des domaines autorisés, séparés par des virgules
+- `EMAIL_USER`: Adresse e-mail pour l'envoi de notifications
+- `EMAIL_PASS`: Mot de passe application (non le mot de passe principal!)
+- `GOOGLE_CLIENT_ID`: Identifiant client Google OAuth
+- `GOOGLE_CLIENT_SECRET`: Secret client Google OAuth
+
+## Bonnes pratiques de sécurité
+
+1. **Ne jamais committer les fichiers .env**
+2. **Toujours utiliser des secrets JWT complexes**
+3. **Activer HTTPS en production**
+4. **Restreindre les origines CORS en production**
+5. **Utiliser des mots de passe d'application Gmail, pas des mots de passe de compte**
+
+## Déploiement
+
+Consultez le fichier DEPLOYMENT.md pour les instructions spécifiques à différentes plateformes cloud.
