@@ -17,7 +17,8 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 @Injectable()
 export class AuthService {
   private googleClient = new OAuth2Client(
-    process.env.GOOGLE_CLIENT_ID || '1001312901323-lc814c59bk011tpu982gl6e7vkm3f8lr.apps.googleusercontent.com',
+    process.env.GOOGLE_CLIENT_ID ||
+      '1001312901323-lc814c59bk011tpu982gl6e7vkm3f8lr.apps.googleusercontent.com',
   );
   // Variable temporaire pour stocker le dernier jeton de réinitialisation
   private lastResetToken: string | null = null;
@@ -37,7 +38,9 @@ export class AuthService {
       // ✨ 2. VÉRIFICATION CHEZ GOOGLE
       const ticket = await this.googleClient.verifyIdToken({
         idToken: cleanToken,
-        audience: process.env.GOOGLE_CLIENT_ID || '1001312901323-lc814c59bk011tpu982gl6e7vkm3f8lr.apps.googleusercontent.com',
+        audience:
+          process.env.GOOGLE_CLIENT_ID ||
+          '1001312901323-lc814c59bk011tpu982gl6e7vkm3f8lr.apps.googleusercontent.com',
       });
 
       const payload = ticket.getPayload();
