@@ -11,7 +11,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
-    // Charger ScheduleModule sans options particulières pour éviter l'erreur
+    // Charger ScheduleModule sans options pour éviter les problèmes avec crypto.randomUUID()
     ScheduleModule.forRoot(),
     SequelizeModule.forRootAsync({
       useClass: DatabaseConfig,
