@@ -11,10 +11,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
-    // Charger ScheduleModule avec les options appropriées
-    ScheduleModule.forRoot({
-      autoStart: process.env.NODE_ENV !== 'production', // Ne pas démarrer automatiquement en production
-    }),
+    // Charger ScheduleModule sans options particulières pour éviter l'erreur
+    ScheduleModule.forRoot(),
     SequelizeModule.forRootAsync({
       useClass: DatabaseConfig,
     }),
