@@ -1,7 +1,4 @@
-import {
-  SequelizeModuleOptions,
-  SequelizeOptionsFactory,
-} from '@nestjs/sequelize';
+import { SequelizeModuleOptions, SequelizeOptionsFactory } from '@nestjs/sequelize';
 import { Injectable } from '@nestjs/common';
 
 @Injectable()

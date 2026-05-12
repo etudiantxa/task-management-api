@@ -226,7 +226,6 @@ export class TaskService {
     });
   }
   
-  /*
   // ✨ Tâche cron pour mettre à jour les tâches en retard
   @Cron(CronExpression.EVERY_HOUR) // Exécute toutes les heures
   async updateOverdueTasks() {
@@ -264,9 +263,7 @@ export class TaskService {
     
     console.log(`✅ ${overdueTasks.length} tâches potentiellement mises à jour.`);
   }
-  */
   
-  /*
   // ✨ Tâche cron pour envoyer des notifications pour les tâches proches de leur échéance
   @Cron(CronExpression.EVERY_30_MINUTES) // Exécute toutes les 30 minutes
   async notifyUpcomingDeadlines() {
@@ -302,5 +299,4 @@ export class TaskService {
     
     console.log(`✅ ${upcomingTasks.length} notifications potentiellement envoyées.`);
   }
-  */
 }
