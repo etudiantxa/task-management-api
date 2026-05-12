@@ -6,7 +6,7 @@ export class DatabaseConfig implements SequelizeOptionsFactory {
   createSequelizeOptions(): SequelizeModuleOptions {
     return {
       dialect: 'sqlite',
-      storage: process.env.DB_STORAGE || '.db/data.sqlite3',
+      storage: process.env.DB_STORAGE || './database_production.sqlite', // Aligné avec le fichier utilisé par les migrations
       autoLoadModels: true,
       synchronize: process.env.NODE_ENV !== 'production', // Ne pas synchroniser en production
     };
