@@ -100,19 +100,45 @@ export class AuthService {
   }
 
   async validateUser(data: LoginRequest): Promise<any> {
-    const user = await this.usersService.findOne(data.username);
-    if (user && (await bcrypt.compare(data.password, user.password))) {
+    try {
+      const user = await this.usersService.findOne(data.username);
+      if (!user) {
+        console.log(`❌ Utilisateur non trouvé: ${data.username}`);
+        return null;
+      }
+
+      const isPasswordValid = await bcrypt.compare(
+        data.password,
+        user.password,
+      );
+      if (!isPasswordValid) {
+        console.log(
+          `❌ Mot de passe incorrect pour l'utilisateur: ${data.username}`,
+        );
+        return null;
+      }
+
+      console.log(`✅ Utilisateur authentifié: ${data.username}`);
       return user;
+    } catch (error) {
+      console.error(`❌ Erreur lors de la validation de l'utilisateur:`, error);
+      return null;
     }
-    return null;
   }
 
   async signIn(data: LoginRequest): Promise<any> {
-    const user = await this.validateUser(data);
-    if (user != undefined && user != null) {
-      return this.getJwt(user);
-    } else {
-      throw new UnauthorizedException();
+    try {
+      const user = await this.validateUser(data);
+      if (user) {
+        return this.getJwt(user);
+      } else {
+        throw new UnauthorizedException(
+          "Nom d'utilisateur ou mot de passe incorrect",
+        );
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de la connexion:', error);
+      throw error;
     }
   }
 

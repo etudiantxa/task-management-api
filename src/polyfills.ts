@@ -15,7 +15,7 @@ if (typeof (global as any).crypto.randomUUID === 'undefined') {
       hex.slice(0, 8),
       hex.slice(8, 12),
       '4' + hex.slice(13, 16), // Version 4
-      (0x80 + bytes[8] % 64).toString(16) + hex.slice(17, 20), // Variante 10xx
+      (0x80 + (bytes[8] % 64)).toString(16) + hex.slice(17, 20), // Variante 10xx
       hex.slice(20, 32)
     ].join('-');
   };
