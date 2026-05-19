@@ -1,256 +1,303 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { OAuth2Client } from 'google-auth-library';
-import { UsersService } from 'src/users/users.service';
-import { LoginRequest } from './dtos/login-request.dt';
+import {
+  Injectable,
+  UnauthorizedException,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
-import { jwtConstants } from './utils/constant';
 import { RegisterRequestDto } from './dtos/register-request.dto';
 import { UpdateUserRequestDto } from './dtos/update-auth-request.dto';
-import {
-  ForgotPasswordDto,
-  ResetPasswordDto,
-} from './dtos/forgot-reset-password.dto';
+import { JwtPayload } from './interfaces/jwt-payload.interface';
+import { LoginRequest } from './dtos/login-request.dt';
 import { EmailService } from '../email/email.service';
+import { OAuth2Client } from 'google-auth-library';
+import { ForgotPasswordDto } from './dtos/forgot-reset-password.dto';
+import { ResetPasswordDto } from './dtos/forgot-reset-password.dto';
+import { User } from '../users/entities/user.entity';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 @Injectable()
 export class AuthService {
-  private googleClient = new OAuth2Client(
-    process.env.GOOGLE_CLIENT_ID ||
-      '1001312901323-lc814c59bk011tpu982gl6e7vkm3f8lr.apps.googleusercontent.com',
-  );
-  // Variable temporaire pour stocker le dernier jeton de réinitialisation
-  private lastResetToken: string | null = null;
+  private readonly logger = new Logger(AuthService.name);
+  private readonly googleOAuth2Client: OAuth2Client;
+  private resetTokens: Map<string, { userId: number; expiresAt: Date }> =
+    new Map();
 
   constructor(
-    private usersService: UsersService,
     private jwtService: JwtService,
+    private usersService: UsersService,
     private emailService: EmailService,
-  ) {}
+  ) {
+    // Initialiser le client Google OAuth2
+    this.googleOAuth2Client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+  }
+
+  async signIn(loginRequest: LoginRequest) {
+    const { username, password } = loginRequest;
+    // Utiliser la méthode findOne au lieu de findByUsername
+    const user = await this.usersService.findOne(username);
+
+    if (!user) {
+      throw new UnauthorizedException(
+        "Nom d'utilisateur ou mot de passe incorrect",
+      );
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException(
+        "Nom d'utilisateur ou mot de passe incorrect",
+      );
+    }
+
+    const payload: JwtPayload = { sub: user.id, username: user.username };
+
+    return {
+      access_token: await this.jwtService.signAsync(payload),
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        nom: user.nom,
+        prenom: user.prenom,
+        photo: user.photo,
+      },
+    };
+  }
+
+  async register(user: RegisterRequestDto) {
+    const newUser = await this.usersService.create(user);
+    
+    const payload: JwtPayload = { sub: newUser.id, username: newUser.username };
+    
+    return {
+      access_token: await this.jwtService.signAsync(payload),
+      user: {
+        id: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+        nom: newUser.nom,
+        prenom: newUser.prenom,
+        photo: newUser.photo,
+      },
+    };
+  }
 
   async googleLogin(idToken: string) {
     try {
-      // ✨ 1. NETTOYAGE DU JETON
-      // Supprime les espaces et les retours à la ligne invisibles (fréquents lors du copier-coller depuis le terminal)
-      const cleanToken = idToken.trim().replace(/\n/g, '').replace(/\r/g, '');
-
-      // ✨ 2. VÉRIFICATION CHEZ GOOGLE
-      const ticket = await this.googleClient.verifyIdToken({
-        idToken: cleanToken,
-        audience:
-          process.env.GOOGLE_CLIENT_ID ||
-          '1001312901323-lc814c59bk011tpu982gl6e7vkm3f8lr.apps.googleusercontent.com',
+      const ticket = await this.googleOAuth2Client.verifyIdToken({
+        idToken,
+        audience: process.env.GOOGLE_CLIENT_ID,
       });
-
       const payload = ticket.getPayload();
-      if (!payload) {
-        throw new UnauthorizedException('Jeton Google vide ou corrompu');
-      }
-      // Extraction des infos Google
-      const { email, family_name, given_name, picture, sub } = payload;
 
-      // ✨ 3. GESTION DE L'UTILISATEUR DANS SQLITE
-      // On cherche si l'utilisateur existe déjà avec cet email
-      let user = await this.usersService.findByEmail(email);
+      // Logique pour créer ou trouver un utilisateur avec Google
+      let user = await this.usersService.findByEmail(payload.email);
 
       if (!user) {
-        console.log(
-          `Utilisateur inexistant. Création du compte pour : ${email}`,
-        );
-
-        // Création automatique si c'est sa première connexion
+        // Créer un nouvel utilisateur avec les données Google
         user = await this.usersService.create({
-          email: email,
-          nom: family_name || '',
-          prenom: given_name || '',
-          username: email.split('@')[0], // On prend le début de l'email comme username par défaut
-          password: sub, // On utilise l'ID unique Google comme password (sera haché par votre service)
-          photo: picture,
+          username: payload.email.split('@')[0],
+          email: payload.email,
+          password: '', // Mot de passe vide pour les comptes Google
+          nom: payload.family_name || '',
+          prenom: payload.given_name || '',
+          photo: payload.picture || '',
         });
-      } else {
-        console.log(`Utilisateur trouvé : ${user.username}`);
       }
 
-      // ✨ 4. GÉNÉRATION DU TOKEN TASKFLOW (JWT)
-      // On crée une session locale pour votre application Flutter
-      const jwtPayload = { 
-        username: user.username, 
-        sub: user.id 
-      };
-
+      const jwtPayload: JwtPayload = { sub: user.id, username: user.username };
       return {
-        token: this.jwtService.sign(jwtPayload),
-        user: user, // On renvoie les infos complètes de l'utilisateur
+        access_token: await this.jwtService.signAsync(jwtPayload),
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          nom: user.nom,
+          prenom: user.prenom,
+          photo: user.photo,
+        },
       };
-
     } catch (error) {
-      // On affiche l'erreur réelle dans le terminal pour vous aider
-      console.error('❌ ERREUR GOOGLE LOGIN :', error.message);
-
-      throw new UnauthorizedException(
-        `Authentification échouée : ${error.message}`,
-      );
-    }
-  }
-
-
-  async register(user: RegisterRequestDto) {
-    return this.usersService.create(user);
-  }
-
-  async validateUser(data: LoginRequest): Promise<any> {
-    try {
-      const user = await this.usersService.findOne(data.username);
-      if (!user) {
-        console.log(`❌ Utilisateur non trouvé: ${data.username}`);
-        return null;
-      }
-
-      const isPasswordValid = await bcrypt.compare(
-        data.password,
-        user.password,
-      );
-      if (!isPasswordValid) {
-        console.log(
-          `❌ Mot de passe incorrect pour l'utilisateur: ${data.username}`,
-        );
-        return null;
-      }
-
-      console.log(`✅ Utilisateur authentifié: ${data.username}`);
-      return user;
-    } catch (error) {
-      console.error(`❌ Erreur lors de la validation de l'utilisateur:`, error);
-      return null;
-    }
-  }
-
-  async signIn(data: LoginRequest): Promise<any> {
-    try {
-      const user = await this.validateUser(data);
-      if (user) {
-        return this.getJwt(user);
-      } else {
-        throw new UnauthorizedException(
-          "Nom d'utilisateur ou mot de passe incorrect",
-        );
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la connexion:', error);
-      throw error;
+      this.logger.error(`Erreur d'authentification Google: ${error.message}`);
+      throw new UnauthorizedException('Erreur d\'authentification Google');
     }
   }
 
   async refreshAccessToken(refreshToken: string) {
     try {
-      const user = this.jwtService.verify(refreshToken, {
-        secret: jwtConstants.secret,
-      });
-      return this.getJwt(user);
-    } catch (e) {
-      throw new UnauthorizedException('Invalid refresh token');
+      const decoded = await this.jwtService.decode(refreshToken);
+      const user = await this.usersService.findById(decoded.sub);
+
+      if (!user) {
+        throw new UnauthorizedException('Utilisateur non trouvé');
+      }
+
+      const payload: JwtPayload = { sub: user.id, username: user.username };
+      return {
+        access_token: await this.jwtService.signAsync(payload),
+      };
+    } catch (error) {
+      this.logger.error(`Erreur de rafraîchissement du token: ${error.message}`);
+      throw new UnauthorizedException('Erreur de rafraîchissement du token');
     }
   }
 
-  async updateUser(token: string, updateUserRequestDto: UpdateUserRequestDto) {
+  async updateUser(jwt: string, updateData: UpdateUserRequestDto) {
     try {
-      const user = this.jwtService.verify(token, {
-        secret: jwtConstants.secret,
+      const decoded = await this.jwtService.verifyAsync(jwt);
+      const user = await this.usersService.findById(decoded.sub);
+
+      if (!user) {
+        throw new UnauthorizedException("L'utilisateur n'existe pas");
+      }
+
+      // Vérifier si l'email est modifié et s'il est déjà utilisé
+      if (updateData.email && updateData.email !== user.email) {
+        const emailExists = await this.usersService.findByEmail(updateData.email);
+        if (emailExists) {
+          throw new UnauthorizedException("Cet email est déjà utilisé par un autre utilisateur");
+        }
+      }
+
+      // Mettre à jour les données de l'utilisateur
+      const updatedUser = await this.usersService.update(user.id, {
+        ...updateData,
       });
-      return this.usersService.update(user.sub, updateUserRequestDto);
-    } catch (e) {
-      throw new UnauthorizedException('Invalid token');
+
+      return {
+        user: {
+          id: updatedUser.id,
+          username: updatedUser.username,
+          email: updatedUser.email,
+          nom: updatedUser.nom,
+          prenom: updatedUser.prenom,
+          photo: updatedUser.photo,
+        },
+        message: 'Profil mis à jour avec succès',
+      };
+    } catch (error) {
+      this.logger.error(`Erreur lors de la mise à jour du profil: ${error.message}`);
+      throw new InternalServerErrorException("Erreur lors de la mise à jour du profil");
     }
   }
 
-  async getUser(token: string) {
+  async updateUserPhoto(jwt: string, file: Express.Multer.File) {
     try {
-      const user = this.jwtService.verify(token, {
-        secret: jwtConstants.secret,
+      const decoded = await this.jwtService.verifyAsync(jwt);
+      const user = await this.usersService.findById(decoded.sub);
+
+      if (!user) {
+        throw new UnauthorizedException("L'utilisateur n'existe pas");
+      }
+
+      // Vérifier que le fichier est une image
+      if (!file.mimetype.startsWith('image/')) {
+        throw new UnauthorizedException("Format de fichier non supporté. Veuillez télécharger une image.");
+      }
+
+      // Mettre à jour la photo de l'utilisateur
+      // Ici, vous pouvez soit stocker le chemin vers l'image, soit encoder l'image en base64
+      const photoPath = `/uploads/profile-pics/${file.filename}`;
+      
+      const updatedUser = await this.usersService.update(user.id, {
+        photo: photoPath,
       });
-      return this.usersService.findById(user.sub);
-    } catch (e) {
-      throw new UnauthorizedException('Invalid token');
+
+      return {
+        user: {
+          id: updatedUser.id,
+          username: updatedUser.username,
+          email: updatedUser.email,
+          nom: updatedUser.nom,
+          prenom: updatedUser.prenom,
+          photo: updatedUser.photo,
+        },
+        message: 'Photo de profil mise à jour avec succès',
+      };
+    } catch (error) {
+      this.logger.error(`Erreur lors de la mise à jour de la photo de profil: ${error.message}`);
+      throw new InternalServerErrorException("Erreur lors de la mise à jour de la photo de profil");
     }
   }
 
-  generateRefreshToken(user: any) {
-    const payload = { username: user.username, sub: user.id };
-    return this.jwtService.sign(payload, {
-      secret: jwtConstants.secret,
-      expiresIn: '7d', // Refresh token expires in 7 days
-    });
-  }
-
-  getJwt(user: any) {
-    const payload = { sub: user.id, username: user.username };
-    return {
-      access_token: this.jwtService.sign(payload, {
-        secret: jwtConstants.secret,
-        expiresIn: '7d',
-      }),
-      refresh_token: this.generateRefreshToken(user),
-    };
-  }
-  
-  // Méthode pour récupérer le dernier jeton de réinitialisation (uniquement pour les tests)
-  getLastResetToken(): string | null {
-    return this.lastResetToken;
-  }
-  
-  // Demande de réinitialisation
   async forgotPassword(dto: ForgotPasswordDto) {
-    // Utiliser findByEmail au lieu de findOne (qui cherche par username)
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) {
-      // Pour la sécurité, ne pas révéler si l'email existe
-      return {
-        message:
-          'Si cet email existe, un lien de réinitialisation a été envoyé.',
-      };
+      // Retourner un message générique pour des raisons de sécurité
+      return { message: "Si cet email existe, un lien de réinitialisation a été envoyé." };
     }
-    // Générer un token unique (JWT)
-    const token = this.jwtService.sign(
-      { sub: user.id },
-      {
-        secret: jwtConstants.secret,
-        expiresIn: '1h',
-      },
-    );
-    
-    // Stocker temporairement le jeton pour les tests
-    this.lastResetToken = token;
-    
-    // Envoyer l'email
-    const resetUrl = `http://localhost:3000/reset-password?token=${token}`;
-    await this.emailService.sendMail(
-      user.email,
-      'Réinitialisation de votre mot de passe',
-      `Cliquez sur ce lien pour réinitialiser votre mot de passe : ${resetUrl}`,
-      `<p>Cliquez sur ce lien pour réinitialiser votre mot de passe : <a href="${resetUrl}">${resetUrl}</a></p>`,
-    );
-    return {
-      message: 'Si cet email existe, un lien de réinitialisation a été envoyé.',
-    };
-}
 
-  // Réinitialisation du mot de passe
-  async resetPassword(dto: ResetPasswordDto) {
-    let payload: any;
+    // Générer un token de réinitialisation
+    const payload = { sub: user.id, email: user.email, iat: Math.floor(Date.now() / 1000) };
+    const token = await this.jwtService.signAsync(payload, { expiresIn: '1h' });
+
+    // Stocker temporairement le token (en production, utiliser une base de données ou Redis)
+    this.resetTokens.set(token, { 
+      userId: user.id, 
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000) // 1 heure
+    });
+
+    // Envoyer l'email de réinitialisation
     try {
-      payload = this.jwtService.verify(dto.token, {
-        secret: jwtConstants.secret,
-      });
-    } catch (e) {
-      throw new BadRequestException('Token invalide ou expiré');
+      await this.emailService.sendMail(
+        dto.email,
+        'Réinitialisation de votre mot de passe',
+        `Cliquez sur ce lien pour réinitialiser votre mot de passe : http://localhost:3000/reset-password?token=${token}`
+      );
+    } catch (error) {
+      // En mode développement, nous pouvons enregistrer l'erreur sans arrêter le processus
+      this.logger.error(`Erreur lors de l'envoi de l'email: ${error.message}`);
     }
-    const user = await this.usersService.findById(payload.sub);
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé');
+
+    return { message: "Si cet email existe, un lien de réinitialisation a été envoyé." };
   }
-    // Mettre à jour le mot de passe (laisser le service utilisateur le hasher)
-    await this.usersService.update(user.id, { password: dto.newPassword });
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const tokenInfo = this.resetTokens.get(dto.token);
+    
+    if (!tokenInfo || tokenInfo.expiresAt < new Date()) {
+      throw new UnauthorizedException('Token invalide ou expiré');
+    }
+
+    // Mettre à jour le mot de passe de l'utilisateur
+    // Le service users se chargera de hasher le mot de passe
+    await this.usersService.update(tokenInfo.userId, { password: dto.newPassword });
+
+    // Supprimer le token utilisé
+    this.resetTokens.delete(dto.token);
+
     return { message: 'Mot de passe réinitialisé avec succès' };
+  }
+
+  getLastResetToken() {
+    const tokens = Array.from(this.resetTokens.keys());
+    return tokens[tokens.length - 1];
+  }
+
+  async getUser(jwt: string) {
+    try {
+      const decoded = await this.jwtService.verifyAsync(jwt);
+      const user = await this.usersService.findById(decoded.sub);
+
+      if (!user) {
+        throw new UnauthorizedException("L'utilisateur n'existe pas");
+      }
+
+      return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        nom: user.nom,
+        prenom: user.prenom,
+        photo: user.photo,
+      };
+    } catch (error) {
+      this.logger.error(`Erreur lors de la récupération du profil: ${error.message}`);
+      throw new InternalServerErrorException("Erreur lors de la récupération du profil");
+    }
   }
 }

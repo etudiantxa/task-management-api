@@ -8,6 +8,8 @@ import {
   Put,
   Get,
   Delete,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginRequest } from './dtos/login-request.dt';
@@ -19,6 +21,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
 } from './dtos/forgot-reset-password.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Auth')
 @Controller('auths')
@@ -67,6 +70,22 @@ export class AuthController {
   getUser(@Headers('Authorization') auth: string) {
     const jwt = auth.replace('Bearer ', '');
     return this.authService.getUser(jwt);
+  }
+
+  @ApiBearerAuth()
+  @Put('profils/photo')
+  @UseInterceptors(FileInterceptor('photo', {
+    dest: './uploads/profile-pics',
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+    },
+  }))
+  updatePhoto(
+    @Headers('Authorization') auth: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const jwt = auth.replace('Bearer ', '');
+    return this.authService.updateUserPhoto(jwt, file);
   }
 
   @Post('forgot-password')

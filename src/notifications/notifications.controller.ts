@@ -29,7 +29,11 @@ export class NotificationsController {
   // ✨ GET une notification
   @Get(':id')
   async findOne(@Req() req, @Param('id') id: string) {
-    return this.notificationsService.findOne(+id, req.user.sub);
+    const notificationId = parseInt(id, 10);
+    if (isNaN(notificationId)) {
+      throw new BadRequestException('Invalid notification ID');
+    }
+    return this.notificationsService.findOne(notificationId, req.user.sub);
   }
 
   // ✨ GET nombre de notifications non lues
@@ -48,7 +52,7 @@ export class NotificationsController {
   // ✨ PATCH marquer comme lue
   @Patch(':id/read')
   async markAsRead(@Req() req, @Param('id') id: string) {
-    const notificationId = parseInt(id, 10); // Convertir correctement en nombre
+    const notificationId = parseInt(id, 10);
     if (isNaN(notificationId)) {
       throw new BadRequestException('Invalid notification ID');
     }
@@ -56,7 +60,7 @@ export class NotificationsController {
   }
 
   // ✨ PATCH marquer toutes les notifications comme lues
-  @Patch('all/read')
+  @Patch('all-read')
   async markAllAsRead(@Req() req) {
     return this.notificationsService.markAllAsRead(req.user.sub);
   }
@@ -64,7 +68,7 @@ export class NotificationsController {
   // ✨ DELETE une notification
   @Delete(':id')
   async remove(@Req() req, @Param('id') id: string) {
-    const notificationId = parseInt(id, 10); // Convertir correctement
+    const notificationId = parseInt(id, 10);
     if (isNaN(notificationId)) {
       throw new BadRequestException('Invalid notification ID');
     }

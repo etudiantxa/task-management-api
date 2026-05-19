@@ -45,16 +45,17 @@ export class EmailService {
       );
       return info;
     } catch (error) {
-      // En cas d'erreur d'envoi d'email, on loggue l'erreur et on continue
+      // En cas d'erreur d'envoi d'email, on loggue l'erreur mais on ne la propage pas
       this.logger.error(`Failed to send email: ${error.message}`);
-      
+
       // Pour les tests, on envoie le contenu dans les logs
       this.logger.log(
         `Email would have contained: To: ${to}, Subject: ${subject}, Content: ${text}`
       );
-      
-      // On ré-émet l'erreur pour que le code appelant puisse la gérer
-      throw error;
+
+      // IMPORTANT: Ne pas propager l'erreur pour permettre la suite du processus de réinitialisation
+      // L'utilisateur ne recevra pas l'email, mais le processus continuera
+      return null;
     }
   }
 }

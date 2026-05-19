@@ -60,7 +60,7 @@ module.exports = {
       await queryInterface.dropTable('tasks');
     } catch (error) {
       // Si la table n'existe pas, on ne fait rien
-      console.log('La table tasks n\'existe pas, pas besoin de la supprimer');
+      console.log("La table tasks n'existe pas, pas besoin de la supprimer");
     }
   },
 };

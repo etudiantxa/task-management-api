@@ -2,10 +2,20 @@ import './polyfills'; // Importer les polyfills avant tout le reste
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import * as express from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Configurer express pour gérer les grandes charges utiles
+  app.use(express.json({ limit: process.env.BODY_LIMIT || '10mb' }));
+  app.use(
+    express.urlencoded({ 
+      limit: process.env.BODY_LIMIT || '10mb', 
+      extended: true,
+    }),
+  );
 
   // Enable CORS
   app.enableCors({
@@ -35,7 +45,6 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
-
 
   await app.listen(process.env.PORT || 3000);
 }

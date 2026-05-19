@@ -58,7 +58,7 @@ export class UsersService {
         'A user with the username ' + user.username + ' already exists',
       );
     }
-    
+
     // Create a new user object with only the properties that are needed
     const userData = {
       username: user.username,
@@ -78,7 +78,7 @@ export class UsersService {
     if (updateUserDto.password) {
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
     }
-    this.userRepository.update(updateUserDto as any, condition);
+    await this.userRepository.update(updateUserDto as any, condition);
     return this.userRepository.findOne({ where: { id } });
   }
 

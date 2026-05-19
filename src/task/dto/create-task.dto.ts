@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsNotEmpty, IsEnum, IsOptional, IsDateString } from 'class-validator';
 
 export enum Priority {
   High = 'High',
@@ -19,18 +20,28 @@ export class CreateTaskDto {
     example: 'title',
     required: true,
   })
+  @IsString()
+  @IsNotEmpty()
   title: string;
+  
   @ApiProperty({
     example: 'content',
     required: true,
   })
+  @IsString()
+  @IsNotEmpty()
   content: string;
+  
   @ApiProperty({ example: 'High', enum: Priority })
+  @IsEnum(Priority)
   priority: Priority;
+  
   @ApiProperty({
     example: 'color',
     required: true,
   })
+  @IsString()
+  @IsNotEmpty()
   color: string;
 
   @ApiProperty({
@@ -38,11 +49,15 @@ export class CreateTaskDto {
     enum: Status,
     required: false,
   })
+  @IsOptional()
+  @IsEnum(Status)
   status?: Status;
 
   @ApiProperty({
     type: Date,
     required: false,
   })
-  dueDate: Date;
+  @IsOptional()
+  @IsDateString()
+  dueDate?: Date;
 }

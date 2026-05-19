@@ -1,8 +1,8 @@
-import { Sequelize } from 'sequelize';
-import config from './config/config.json';
+const { Sequelize, DataTypes } = require('sequelize');
+const config = require('./config/config.json');
 
 // Charger la configuration selon l'environnement
-const env = process.env.NODE_ENV || 'production';
+const env = process.env.NODE_ENV || 'development';
 const dbConfig = config[env];
 
 const sequelize = new Sequelize(
@@ -12,13 +12,12 @@ const sequelize = new Sequelize(
   dbConfig
 );
 
-async function initializeDatabase() {
+async function initializeDb() {
   try {
-    // S'assurer que la base de données est prête
-    await sequelize.authenticate();
-    console.log('Connexion à la base de données réussie.');
-
-    // Créer les tables si elles n'existent pas
+    // Synchroniser les modèles pour créer les tables si elles n'existent pas
+    // Cela crée les tables de base sans dépendre des migrations
+    
+    // Créer la table users si elle n'existe pas
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,13 +25,14 @@ async function initializeDatabase() {
         prenom VARCHAR(255) NOT NULL,
         email VARCHAR(255),
         password VARCHAR(255) NOT NULL,
-        username VARCHAR(255) NOT NULL UNIQUE,
+        username VARCHAR(255) NOT NULL,
         photo TEXT,
         createdAt DATETIME NOT NULL,
         updatedAt DATETIME NOT NULL
       )
     `);
 
+    // Créer la table tasks si elle n'existe pas
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,6 +49,7 @@ async function initializeDatabase() {
       )
     `);
 
+    // Créer la table notifications si elle n'existe pas
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS notifications (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,22 +62,17 @@ async function initializeDatabase() {
         readAt DATETIME,
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
         updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (taskId) REFERENCES tasks(id) ON DELETE CASCADE
+        FOREIGN KEY (userId) REFERENCES users(id),
+        FOREIGN KEY (taskId) REFERENCES tasks(id)
       )
     `);
 
-    console.log("Tables créées si elles n'existaient pas.");
-    
-    // Fermer la connexion
-    await sequelize.close();
-    
-    console.log('Initialisation de la base de données terminée.');
+    console.log('Database initialized successfully');
     process.exit(0);
   } catch (error) {
-    console.error('Erreur lors de l\'initialisation de la base de données:', error);
+    console.error('Error initializing database:', error);
     process.exit(1);
   }
 }
 
-initializeDatabase();
+initializeDb();

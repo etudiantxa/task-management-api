@@ -47,7 +47,7 @@ export class TaskService {
       task.id,
       NotificationType.TASK_CREATED,
       '✨ Nouvelle tâche créée',
-      `Vous avez créé la tâche "${task.title}"`,
+      `Vous avez créé la tâche "${task.title}". Description: ${task.content}`,
     );
 
     // 2️⃣ NOTIFICATIONS POUR TOUS LES AUTRES UTILISATEURS
@@ -69,7 +69,7 @@ export class TaskService {
             task.id,
             NotificationType.TASK_CREATED,
             '✨ Nouvelle tâche créée',
-            `${creator.username} a créé la tâche "${task.title}"`,
+            `${creator.username} a créé la tâche "${task.title}". Description: ${task.content}`,
           );
         }
       }
@@ -169,7 +169,7 @@ export class TaskService {
 
     const task = await this.findOne(id, userId);
 
-    return task.update({
+    const updatedTask = await task.update({
       title: dto.title || task.title,
       content: dto.content || task.content,
       priority: dto.priority?.toUpperCase() || task.priority,
@@ -177,6 +177,62 @@ export class TaskService {
       color: dto.color || task.color,
       dueDate: dto.dueDate || task.dueDate,
     });
+    
+    // ============================================================
+    // 🔔 NOTIFICATIONS - ENVOYER UNE NOTIFICATION QUAND UNE TÂCHE EST MISE À JOUR
+    // ============================================================
+    try {
+      console.log(`🔔 Envoi notifications pour mise à jour tâche ${id}`);
+      
+      // 1️⃣ NOTIFICATION POUR LE PROPRIÉTAIRE DE LA TÂCHE
+      console.log(
+        ` McCart Notification mise à jour pour propriétaire (user ${userId})`,
+      );
+      await this.notificationsService.create(
+        userId,
+        task.id,
+        NotificationType.TASK_UPDATED,
+        '✏️ Tâche mise à jour',
+        `Votre tâche "${updatedTask.title}" a été mise à jour. Description: ${updatedTask.content}`,
+      );
+
+      // 2️⃣ NOTIFICATIONS POUR TOUS LES AUTRES UTILISATEURS
+      console.log(` McCart Récupération de tous les utilisateurs...`);
+      const allUsers = await this.usersService.findAll();
+      console.log(` McCart ${allUsers.length} utilisateur(s) trouvé(s)`);
+
+      for (const otherUser of allUsers) {
+        // Ne pas notifier le propriétaire de la tâche 2 fois
+        if (otherUser.id !== userId) {
+          console.log(
+            ` McCart Notification mise à jour pour user ${otherUser.id}`,
+          );
+
+          // Récupérer le nom du propriétaire de la tâche
+          const owner = await this.usersService.findOneById(userId);
+
+          await this.notificationsService.create(
+            otherUser.id,
+            task.id,
+            NotificationType.TASK_UPDATED,
+            '✏️ Tâche mise à jour',
+            `${owner.username} a mis à jour la tâche "${updatedTask.title}". Description: ${updatedTask.content}`,
+          );
+        }
+      }
+
+      console.log(`✅ Toutes les notifications de mise à jour envoyées`);
+    } catch (error) {
+      console.error(
+        `❌ Erreur envoi notifications de mise à jour pour la tâche:`,
+        error,
+      );
+      // Ne pas échouer si les notifications échouent
+    }
+
+    // ============================================================
+    
+    return updatedTask;
   }
 
   // ✨ Supprimer une tâche
@@ -246,7 +302,9 @@ export class TaskService {
     });
 
     for (const task of overdueTasks) {
-      console.log(`🔄 Mise à jour du statut de la tâche ${task.id} à "overdue"...`);
+      console.log(
+        `🔄 Mise à jour du statut de la tâche ${task.id} à "overdue"...`,
+      );
       
       // Mettre à jour le statut de la tâche à "pending" pour indiquer qu'elle est en retard
       await task.update({ status: TaskStatus.PENDING });
