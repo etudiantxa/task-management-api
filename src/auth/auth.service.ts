@@ -123,7 +123,7 @@ export class AuthService {
       };
     } catch (error) {
       this.logger.error(`Erreur d'authentification Google: ${error.message}`);
-      throw new UnauthorizedException('Erreur d\'authentification Google');
+      throw new UnauthorizedException("Erreur d'authentification Google");
     }
   }
 

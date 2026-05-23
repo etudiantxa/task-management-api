@@ -1,26 +1,26 @@
 {
   "development": {
-    "username": "root",
-    "password": null,
-    "database": "database_development",
+    "username": "postgres",
+    "password": "Bayemor_1994",
+    "database": "taskflow_db",
     "host": "127.0.0.1",
-    "dialect": "sqlite",
-    "storage": "./.db/data.sqlite3"
+    "port": 5432,
+    "dialect": "postgres"
   },
   "test": {
-    "username": "root",
-    "password": null,
-    "database": "database_test",
+    "username": "postgres",
+    "password": "votre_mot_de_passe_reel_postgresql",
+    "database": "taskflow_db_test",
     "host": "127.0.0.1",
-    "dialect": "sqlite",
-    "storage": "./database_test.sqlite"
+    "port": 5432,
+    "dialect": "postgres"
   },
   "production": {
-    "username": "root",
-    "password": null,
-    "database": "database_production",
+    "username": "postgres",
+    "password": "votre_mot_de_passe_reel_postgresql",
+    "database": "taskflow_db",
     "host": "127.0.0.1",
-    "dialect": "sqlite",
-    "storage": "./database_production.sqlite"
+    "port": 5432,
+    "dialect": "postgres"
   }
 }
