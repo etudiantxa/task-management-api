@@ -17,6 +17,7 @@ import { ForgotPasswordDto } from './dtos/forgot-reset-password.dto';
 import { ResetPasswordDto } from './dtos/forgot-reset-password.dto';
 import { User } from '../users/entities/user.entity';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Express } from 'express';
 
 @Injectable()
 export class AuthService {

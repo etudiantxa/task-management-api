@@ -22,6 +22,7 @@ import {
   ResetPasswordDto,
 } from './dtos/forgot-reset-password.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Express } from 'express';
 
 @ApiTags('Auth')
 @Controller('auths')
