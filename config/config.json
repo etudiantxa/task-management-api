@@ -16,10 +16,10 @@
     "dialect": "postgres"
   },
   "production": {
-    "username": "postgres",
-    "password": "votre_mot_de_passe_reel_postgresql",
-    "database": "taskflow_db",
-    "host": "127.0.0.1",
+    "username": "taskflow_db_31yg_user",
+    "password": "sGu1kxjFSiCKkfOIIFmfTJBTNQdL1g14",
+    "database": "taskflow_db_31yg",
+    "host": "dpg-d88tj76k1jcs73ftdna0-a",
     "port": 5432,
     "dialect": "postgres"
   }
