@@ -11,7 +11,7 @@ import {
 import { User } from '../../users/entities/user.entity';
 import { Task } from '../../task/entities/task.entity';
 
-@Table
+@Table({ tableName: 'Notifications', timestamps: true })
 export class Notification extends Model<Notification> {
   @PrimaryKey
   @AutoIncrement
