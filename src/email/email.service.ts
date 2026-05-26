@@ -32,13 +32,15 @@ export class EmailService {
 
   async sendMail(to: string, subject: string, text: string, html?: string) {
     try {
-      const info = await this.transporter.sendMail({
+      const mailOptions = {
         from: process.env.EMAIL_USER,
         to,
         subject,
         text,
-        html,
-      });
+        html: html || `<p>${text}</p>`,
+      };
+
+      const info = await this.transporter.sendMail(mailOptions);
 
       this.logger.log(
         `Email sent successfully to: ${to}. Message ID: ${info.messageId}`,

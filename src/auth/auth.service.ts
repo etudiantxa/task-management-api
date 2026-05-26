@@ -142,7 +142,9 @@ export class AuthService {
         access_token: await this.jwtService.signAsync(payload),
       };
     } catch (error) {
-      this.logger.error(`Erreur de rafraîchissement du token: ${error.message}`);
+      this.logger.error(
+        `Erreur de rafraîchissement du token: ${error.message}`,
+      );
       throw new UnauthorizedException('Erreur de rafraîchissement du token');
     }
   }
@@ -158,9 +160,13 @@ export class AuthService {
 
       // Vérifier si l'email est modifié et s'il est déjà utilisé
       if (updateData.email && updateData.email !== user.email) {
-        const emailExists = await this.usersService.findByEmail(updateData.email);
+        const emailExists = await this.usersService.findByEmail(
+          updateData.email,
+        );
         if (emailExists) {
-          throw new UnauthorizedException("Cet email est déjà utilisé par un autre utilisateur");
+          throw new UnauthorizedException(
+            'Cet email est déjà utilisé par un autre utilisateur',
+          );
         }
       }
 
@@ -181,8 +187,12 @@ export class AuthService {
         message: 'Profil mis à jour avec succès',
       };
     } catch (error) {
-      this.logger.error(`Erreur lors de la mise à jour du profil: ${error.message}`);
-      throw new InternalServerErrorException("Erreur lors de la mise à jour du profil");
+      this.logger.error(
+        `Erreur lors de la mise à jour du profil: ${error.message}`,
+      );
+      throw new InternalServerErrorException(
+        'Erreur lors de la mise à jour du profil',
+      );
     }
   }
 
@@ -197,7 +207,9 @@ export class AuthService {
 
       // Vérifier que le fichier est une image
       if (!file.mimetype.startsWith('image/')) {
-        throw new UnauthorizedException("Format de fichier non supporté. Veuillez télécharger une image.");
+        throw new UnauthorizedException(
+          'Format de fichier non supporté. Veuillez télécharger une image.',
+        );
       }
 
       // Mettre à jour la photo de l'utilisateur
@@ -220,8 +232,12 @@ export class AuthService {
         message: 'Photo de profil mise à jour avec succès',
       };
     } catch (error) {
-      this.logger.error(`Erreur lors de la mise à jour de la photo de profil: ${error.message}`);
-      throw new InternalServerErrorException("Erreur lors de la mise à jour de la photo de profil");
+      this.logger.error(
+        `Erreur lors de la mise à jour de la photo de profil: ${error.message}`,
+      );
+      throw new InternalServerErrorException(
+        'Erreur lors de la mise à jour de la photo de profil',
+      );
     }
   }
 
@@ -229,11 +245,18 @@ export class AuthService {
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) {
       // Retourner un message générique pour des raisons de sécurité
-      return { message: "Si cet email existe, un lien de réinitialisation a été envoyé." };
+      return {
+        message:
+          'Si cet email existe, un lien de réinitialisation a été envoyé.',
+      };
     }
 
     // Générer un token de réinitialisation
-    const payload = { sub: user.id, email: user.email, iat: Math.floor(Date.now() / 1000) };
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      iat: Math.floor(Date.now() / 1000),
+    };
     const token = await this.jwtService.signAsync(payload, { expiresIn: '1h' });
 
     // Stocker temporairement le token (en production, utiliser une base de données ou Redis)
@@ -242,19 +265,89 @@ export class AuthService {
       expiresAt: new Date(Date.now() + 60 * 60 * 1000) // 1 heure
     });
 
+    // Construire le lien de réinitialisation avec la variable d'environnement
+    // Utiliser l'URL de redirection web si disponible, sinon le deep link direct
+    const resetLink = process.env.RESET_PASSWORD_DEEP_LINK 
+      ? `${process.env.RESET_PASSWORD_DEEP_LINK}${token}`
+      : `http://localhost:3000/reset-password?token=${token}`;
+
+    // Lien de redirection web pour l'email (cliquable dans les clients e-mail)
+    const webRedirectLink = process.env.RESET_PASSWORD_WEB_REDIRECT_URL
+      ? `${process.env.RESET_PASSWORD_WEB_REDIRECT_URL}?token=${token}`
+      : `http://localhost:3000/reset-password?token=${token}`;
+
+    // Texte et HTML pour l'e-mail
+    const emailText = `Réinitialisation de votre mot de passe\n\nVous avez demandé la réinitialisation de votre mot de passe.\n\nCliquez sur le lien ci-dessous pour réinitialiser votre mot de passe :\n${webRedirectLink}\n\nCe lien expirera dans 1 heure.\n\nSi vous ne pouvez pas cliquer sur le lien, copiez-collez-le dans votre navigateur.`;
+    
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Réinitialisation de mot de passe</title>
+      </head>
+      <body style="margin:0; padding:0; font-family:Arial, sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f5f5">
+          <tr>
+            <td align="center" valign="top" style="padding:20px 0;">
+              <table width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                <tr>
+                  <td align="left" valign="top" style="padding:30px;">
+                    <h2 style="margin:0 0 20px 0; color:#333; font-size:24px;">Réinitialisation de votre mot de passe</h2>
+                    
+                    <p style="margin:0 0 20px 0; color:#666; line-height:1.6;">Vous avez demandé la réinitialisation de votre mot de passe.</p>
+                    
+                    <p style="margin:0 0 30px 0; color:#666; line-height:1.6;">Cliquez sur le bouton ci-dessous pour réinitialiser votre mot de passe :</p>
+                    
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" style="padding:20px 0;">
+                          <a href="${webRedirectLink}" 
+                             target="_blank"
+                             style="display:inline-block; padding:16px 32px; background-color:#007bff; color:white; text-decoration:none; border-radius:4px; font-weight:bold; font-size:16px; text-align:center; border:1px solid #007bff;">
+                            Réinitialiser votre mot de passe
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                    
+                    <p style="margin:30px 0 10px 0; color:#666; line-height:1.6;">Si le bouton ci-dessus ne fonctionne pas, copiez-collez le lien suivant dans votre navigateur :</p>
+                    
+                    <div style="background-color:#f8f9fa; padding:12px; border-radius:4px; word-break:break-all; margin:10px 0; font-family:monospace; font-size:14px; color:#495057;">
+                      ${webRedirectLink}
+                    </div>
+                    
+                    <p style="margin:20px 0 0 0; color:#666; line-height:1.6;"><strong>Important :</strong> Ce lien expirera dans 1 heure.</p>
+                    
+                    <hr style="margin:30px 0; border:0; border-top:1px solid #eee;" />
+                    
+                    <p style="margin:0; color:#999; font-size:12px; line-height:1.6;">Si vous n'avez pas demandé cette réinitialisation, ignorez cet email. Votre mot de passe ne sera pas modifié.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
     // Envoyer l'email de réinitialisation
     try {
       await this.emailService.sendMail(
         dto.email,
         'Réinitialisation de votre mot de passe',
-        `Cliquez sur ce lien pour réinitialiser votre mot de passe : http://localhost:3000/reset-password?token=${token}`
+        emailText,
+        emailHtml
       );
     } catch (error) {
       // En mode développement, nous pouvons enregistrer l'erreur sans arrêter le processus
       this.logger.error(`Erreur lors de l'envoi de l'email: ${error.message}`);
     }
 
-    return { message: "Si cet email existe, un lien de réinitialisation a été envoyé." };
+    return {
+      message: 'Si cet email existe, un lien de réinitialisation a été envoyé.',
+    };
   }
 
   async resetPassword(dto: ResetPasswordDto) {
@@ -266,7 +359,9 @@ export class AuthService {
 
     // Mettre à jour le mot de passe de l'utilisateur
     // Le service users se chargera de hasher le mot de passe
-    await this.usersService.update(tokenInfo.userId, { password: dto.newPassword });
+    await this.usersService.update(tokenInfo.userId, {
+      password: dto.newPassword,
+    });
 
     // Supprimer le token utilisé
     this.resetTokens.delete(dto.token);
@@ -297,8 +392,12 @@ export class AuthService {
         photo: user.photo,
       };
     } catch (error) {
-      this.logger.error(`Erreur lors de la récupération du profil: ${error.message}`);
-      throw new InternalServerErrorException("Erreur lors de la récupération du profil");
+      this.logger.error(
+        `Erreur lors de la récupération du profil: ${error.message}`,
+      );
+      throw new InternalServerErrorException(
+        'Erreur lors de la récupération du profil',
+      );
     }
   }
 }
