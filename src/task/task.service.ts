@@ -169,14 +169,116 @@ export class TaskService {
 
     const task = await this.findOne(id, userId);
 
-    const updatedTask = await task.update({
-      title: dto.title || task.title,
-      content: dto.content || task.content,
-      priority: dto.priority?.toUpperCase() || task.priority,
-      status: dto.status || task.status,
-      color: dto.color || task.color,
-      dueDate: dto.dueDate || task.dueDate,
+    // Afficher les valeurs reçues dans le DTO et les valeurs existantes pour débogage
+    console.log(`Valeurs reçues dans DTO:`, {
+      title: dto.title,
+      content: dto.content,
+      priority: dto.priority,
+      status: dto.status,
+      color: dto.color,
+      dueDate: dto.dueDate
     });
+
+    console.log(`Valeurs existantes dans la tâche:`, {
+      title: task.title,
+      content: task.content,
+      priority: task.priority,
+      status: task.status,
+      color: task.color,
+      dueDate: task.dueDate
+    });
+
+    // Vérifier si des modifications doivent être apportées en comparant avec les valeurs existantes
+    const updateData: any = {};
+    let hasChanges = false;
+
+    // Comparer et ajouter seulement si la valeur est différente
+    if (
+      dto.title !== undefined &&
+      dto.title !== null &&
+      dto.title.trim() !== '' &&
+      dto.title !== task.title
+    ) {
+      console.log(
+        `Changement détecté pour le titre: "${dto.title}" !== "${task.title}"`,
+      );
+      updateData.title = dto.title;
+      hasChanges = true;
+    }
+    
+    if (
+      dto.content !== undefined &&
+      dto.content !== null &&
+      dto.content.trim() !== '' &&
+      dto.content !== task.content
+    ) {
+      console.log(
+        `Changement détecté pour le contenu: "${dto.content}" !== "${task.content}"`,
+      );
+      updateData.content = dto.content;
+      hasChanges = true;
+    }
+    
+    if (
+      dto.priority !== undefined &&
+      dto.priority !== null &&
+      dto.priority.trim() !== '' &&
+      dto.priority.toUpperCase() !== task.priority
+    ) {
+      console.log(`Changement détecté pour la priorité: "${dto.priority}" !== "${task.priority}"`);
+      updateData.priority = dto.priority.toUpperCase();
+      hasChanges = true;
+    }
+    
+    if (
+      dto.status !== undefined &&
+      dto.status !== null &&
+      dto.status.trim() !== '' &&
+      dto.status !== task.status
+    ) {
+      console.log(`Changement détecté pour le statut: "${dto.status}" !== "${task.status}"`);
+      updateData.status = dto.status;
+      hasChanges = true;
+    }
+    
+    if (
+      dto.color !== undefined &&
+      dto.color !== null &&
+      dto.color.trim() !== '' &&
+      dto.color !== task.color
+    ) {
+      console.log(`Changement détecté pour la couleur: "${dto.color}" !== "${task.color}"`);
+      updateData.color = dto.color;
+      hasChanges = true;
+    }
+    
+    if (
+      dto.dueDate !== undefined &&
+      dto.dueDate !== null
+    ) {
+      // Convertir les deux dates en objets Date pour comparaison équivalente
+      const receivedDate = new Date(dto.dueDate);
+      const existingDate = new Date(task.dueDate);
+      
+      // Comparer les timestamps pour ignorer les différences de format
+      if (receivedDate.getTime() !== existingDate.getTime()) {
+        console.log(`Changement détecté pour la date d'échéance: "${dto.dueDate}" !== "${task.dueDate}"`);
+        updateData.dueDate = dto.dueDate;
+        hasChanges = true;
+      }
+    }
+
+    // Si aucune modification n'a été apportée, retourner simplement la tâche sans notification
+    if (!hasChanges) {
+      console.log(
+        `⚠️ Aucune modification détectée pour la tâche ${id}, aucune notification envoyée`,
+      );
+      return task;
+    }
+
+    console.log(`🚀 Des modifications ont été détectées, mise à jour en cours...`);
+
+    const updatedTask = await task.update(updateData);
     
     // ============================================================
     // 🔔 NOTIFICATIONS - ENVOYER UNE NOTIFICATION QUAND UNE TÂCHE EST MISE À JOUR
