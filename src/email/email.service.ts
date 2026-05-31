@@ -25,10 +25,21 @@ export class EmailService {
     });
     
     // Vérifier que les variables d'environnement sont définies
-    if (!process.env.SMTP_HOST || !process.env.SMTP_PORT || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      this.logger.warn('Les variables SMTP ne sont pas toutes définies dans l\'environnement');
+    if (
+      !process.env.SMTP_HOST ||
+      !process.env.SMTP_PORT ||
+      !process.env.SMTP_USER ||
+      !process.env.SMTP_PASS
+    ) {
+      this.logger.warn(
+        "Les variables SMTP ne sont pas toutes définies dans l'environnement",
+      );
     } else {
-      this.logger.log(`Email service prêt avec Brevo SMTP sur le port ${process.env.SMTP_PORT || 2525}`);
+      this.logger.log(
+        `Email service prêt avec Brevo SMTP sur le port ${
+          process.env.SMTP_PORT || 2525
+        }`,
+      );
     }
   }
 
@@ -41,12 +52,18 @@ export class EmailService {
         text,
         html: html || `<p>${text}</p>`,
       });
-      this.logger.log(`Email de réinitialisation envoyé à : ${to}. Message ID: ${info.messageId}`);
+      this.logger.log(
+        `Email de réinitialisation envoyé à : ${to}. Message ID: ${info.messageId}`,
+      );
       return info;
     } catch (error) {
       this.logger.error(`Erreur d'envoi SMTP : ${error.message}`);
       // Log des détails supplémentaires pour le débogage
-      this.logger.error(`Détails: Host=${process.env.SMTP_HOST}, Port=${process.env.SMTP_PORT || 2525}, User=${process.env.SMTP_USER}`);
+      this.logger.error(
+        `Détails: Host=${process.env.SMTP_HOST}, Port=${
+          process.env.SMTP_PORT || 2525
+        }, User=${process.env.SMTP_USER}`,
+      );
       return null;
     }
   }
