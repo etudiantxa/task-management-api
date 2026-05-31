@@ -225,7 +225,9 @@ export class TaskService {
       dto.priority.trim() !== '' &&
       dto.priority.toUpperCase() !== task.priority
     ) {
-      console.log(`Changement détecté pour la priorité: "${dto.priority}" !== "${task.priority}"`);
+      console.log(
+        `Changement détecté pour la priorité: "${dto.priority}" !== "${task.priority}"`,
+      );
       updateData.priority = dto.priority.toUpperCase();
       hasChanges = true;
     }
@@ -236,7 +238,9 @@ export class TaskService {
       dto.status.trim() !== '' &&
       dto.status !== task.status
     ) {
-      console.log(`Changement détecté pour le statut: "${dto.status}" !== "${task.status}"`);
+      console.log(
+        `Changement détecté pour le statut: "${dto.status}" !== "${task.status}"`,
+      );
       updateData.status = dto.status;
       hasChanges = true;
     }
@@ -247,7 +251,9 @@ export class TaskService {
       dto.color.trim() !== '' &&
       dto.color !== task.color
     ) {
-      console.log(`Changement détecté pour la couleur: "${dto.color}" !== "${task.color}"`);
+      console.log(
+        `Changement détecté pour la couleur: "${dto.color}" !== "${task.color}"`,
+      );
       updateData.color = dto.color;
       hasChanges = true;
     }
