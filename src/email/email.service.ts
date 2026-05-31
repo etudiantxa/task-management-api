@@ -9,8 +9,8 @@ export class EmailService {
   constructor() {
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT) || 587,
-      secure: false, // false pour le port 587, true pour le port 465
+      port: parseInt(process.env.SMTP_PORT) || 2525, // Utilisation du port 2525 qui est souvent plus compatible avec les plateformes cloud
+      secure: false, // false pour les ports 587 et 2525, true pour le port 465
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
@@ -28,7 +28,7 @@ export class EmailService {
     if (!process.env.SMTP_HOST || !process.env.SMTP_PORT || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
       this.logger.warn('Les variables SMTP ne sont pas toutes définies dans l\'environnement');
     } else {
-      this.logger.log('Email service prêt avec Brevo SMTP');
+      this.logger.log(`Email service prêt avec Brevo SMTP sur le port ${process.env.SMTP_PORT || 2525}`);
     }
   }
 
@@ -46,7 +46,7 @@ export class EmailService {
     } catch (error) {
       this.logger.error(`Erreur d'envoi SMTP : ${error.message}`);
       // Log des détails supplémentaires pour le débogage
-      this.logger.error(`Détails: Host=${process.env.SMTP_HOST}, Port=${process.env.SMTP_PORT}, User=${process.env.SMTP_USER}`);
+      this.logger.error(`Détails: Host=${process.env.SMTP_HOST}, Port=${process.env.SMTP_PORT || 2525}, User=${process.env.SMTP_USER}`);
       return null;
     }
   }

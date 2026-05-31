@@ -258,17 +258,16 @@ export class TaskService {
       hasChanges = true;
     }
     
-    if (
-      dto.dueDate !== undefined &&
-      dto.dueDate !== null
-    ) {
+    if (dto.dueDate !== undefined && dto.dueDate !== null) {
       // Convertir les deux dates en objets Date pour comparaison équivalente
       const receivedDate = new Date(dto.dueDate);
       const existingDate = new Date(task.dueDate);
       
       // Comparer les timestamps pour ignorer les différences de format
       if (receivedDate.getTime() !== existingDate.getTime()) {
-        console.log(`Changement détecté pour la date d'échéance: "${dto.dueDate}" !== "${task.dueDate}"`);
+        console.log(
+          `Changement détecté pour la date d'échéance: "${dto.dueDate}" !== "${task.dueDate}"`,
+        );
         updateData.dueDate = dto.dueDate;
         hasChanges = true;
       }
@@ -282,7 +281,9 @@ export class TaskService {
       return task;
     }
 
-    console.log(`🚀 Des modifications ont été détectées, mise à jour en cours...`);
+    console.log(
+      `🚀 Des modifications ont été détectées, mise à jour en cours...`,
+    );
 
     const updatedTask = await task.update(updateData);
     
