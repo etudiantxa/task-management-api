@@ -1,61 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 @Injectable()
 export class EmailService {
-  private transporter: nodemailer.Transporter;
+  private resend: Resend;
   private readonly logger = new Logger(EmailService.name);
 
   constructor() {
-    this.initTransporter();
-  }
-
-  private initTransporter() {
-    const host = process.env.SMTP_HOST;
-    const port = parseInt(process.env.SMTP_PORT) || 465;
-    const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS;
-
-    // Log de la config au démarrage pour vérifier les valeurs réelles
-    this.logger.log(
-      `Initialisation SMTP => host:${host} | port:${port} | user:${user}`,
-    );
-
-    if (!host || !user || !pass) {
-      this.logger.warn(
-        "⚠️  Variables SMTP manquantes — vérifiez SMTP_HOST, SMTP_USER, SMTP_PASS dans votre .env",
-      );
-    }
-
-    this.transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure: port === 465,   // true pour 465 (SSL), false pour 587/2525 (STARTTLS)
-      auth: { user, pass },
-      connectionTimeout: 60_000,
-      greetingTimeout: 30_000,
-      socketTimeout:   60_000,
-      tls: {
-        rejectUnauthorized: false,
-      },
-    });
-  }
-
-  /**
-   * Vérifie la connexion SMTP (utile au démarrage ou pour un health-check)
-   */
-  async verifyConnection(): Promise<boolean> {
-    try {
-      await this.transporter.verify();
-      this.logger.log('✅ Connexion SMTP vérifiée avec succès');
-      return true;
-    } catch (error) {
-      this.logger.error(`❌ Échec de la vérification SMTP : ${error.message}`);
-      this.logger.error(
-        `Détails: Host=${process.env.SMTP_HOST}, Port=${process.env.SMTP_PORT}, User=${process.env.SMTP_USER}`,
-      );
-      return false;
-    }
+    this.resend = new Resend(process.env.RESEND_API_KEY);
+    this.logger.log('Email service initialized with Resend');
   }
 
   /**
@@ -66,23 +19,24 @@ export class EmailService {
     subject: string,
     text: string,
     html?: string,
-  ): Promise<nodemailer.SentMessageInfo | null> {
+  ): Promise<any> {
     try {
-      const info = await this.transporter.sendMail({
-        from: `"TaskFlow Pro" <${process.env.SMTP_USER}>`,
+      const data = await this.resend.emails.send({
+        from: 'onboarding@resend.dev', // domaine par défaut Resend
         to,
         subject,
-        text,
         html: html || `<p>${text}</p>`,
       });
-
-      this.logger.log(`✅ Email envoyé à ${to} — Message ID: ${info.messageId}`);
-      return info;
+      
+      if (data.error) {
+        this.logger.error(`❌ Erreur d'envoi d'email : ${data.error.message}`);
+        return null;
+      }
+      
+      this.logger.log(`✅ Email envoyé à ${to} — Message ID: ${data.data.id}`);
+      return data;
     } catch (error) {
-      this.logger.error(`❌ Erreur d'envoi SMTP : ${error.message}`);
-      this.logger.error(
-        `Détails: Host=${process.env.SMTP_HOST}, Port=${process.env.SMTP_PORT}, User=${process.env.SMTP_USER}`,
-      );
+      this.logger.error(`❌ Erreur d'envoi d'email : ${error.message}`);
       return null;
     }
   }
