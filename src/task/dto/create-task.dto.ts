@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsEnum, IsOptional, IsDateString } from 'class-validator';
+import { IsString, IsNotEmpty, IsEnum, IsOptional, IsDateString, IsArray, IsNumber } from 'class-validator';
 
 export enum Priority {
   High = 'High',
@@ -13,6 +13,7 @@ export enum Status {
   Completed = 'Completed',
   Pending = 'Pending',
   Cancelled = 'Cancelled',
+  Expired = 'Expired'
 }
 
 export class CreateTaskDto {
@@ -60,4 +61,14 @@ export class CreateTaskDto {
   @IsOptional()
   @IsDateString()
   dueDate?: Date;
+
+  @ApiProperty({
+    type: [Number],
+    required: false,
+    description: 'IDs des utilisateurs à assigner à cette tâche'
+  })
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  assignedUserIds?: number[];
 }

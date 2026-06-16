@@ -32,4 +32,10 @@ export class UpdateTaskDto extends PartialType(CreateTaskDto) {
     required: false,
   })
   userId: number;
+  @ApiProperty({
+    type: [Number],
+    required: false,
+    description: 'IDs des utilisateurs à assigner à cette tâche'
+  })
+  assignedUserIds?: number[];
 }

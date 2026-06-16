@@ -8,14 +8,18 @@ import {
   NotificationType,
 } from '../notifications/notifications.service';
 import { UsersService } from '../users/users.service';
-import { Op } from 'sequelize';
+import { Op, Sequelize } from 'sequelize';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { TaskAssignment } from './entities/task-assignment.entity';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class TaskService {
   constructor(
     @InjectModel(Task)
     private taskRepository: typeof Task,
+    @InjectModel(TaskAssignment)
+    private taskAssignmentRepository: typeof TaskAssignment,
     private notificationsService: NotificationsService,
     private usersService: UsersService,
   ) {}
@@ -36,6 +40,11 @@ export class TaskService {
 
     console.log(`✅ Tâche créée : ${task.id}`);
 
+    // Gérer les assignations d'utilisateurs
+    if (dto.assignedUserIds && Array.isArray(dto.assignedUserIds)) {
+      await this.assignUsersToTask(task.id, dto.assignedUserIds);
+    }
+
     // ============================================================
     // 🔔 NOTIFICATIONS - VERSION AMÉLIORÉE
     // ============================================================
@@ -50,34 +59,36 @@ export class TaskService {
       `Vous avez créé la tâche "${task.title}". Description: ${task.content}`,
     );
 
-    // 2️⃣ NOTIFICATIONS POUR TOUS LES AUTRES UTILISATEURS
+    // 2️⃣ NOTIFICATIONS POUR LES UTILISATEURS ASSIGNÉS
     try {
-      console.log(` McCart Récupération de tous les utilisateurs...`);
-      const allUsers = await this.usersService.findAll();
-      console.log(` McCart ${allUsers.length} utilisateur(s) trouvé(s)`);
+      console.log(` McCart Récupération des utilisateurs assignés...`);
+      
+      // Récupérer les utilisateurs assignés à cette tâche
+      const assignedUsers = await this.getAssignedUsers(task.id);
+      console.log(` McCart ${assignedUsers.length} utilisateur(s) assigné(s) trouvé(s)`);
 
-      for (const otherUser of allUsers) {
-        // Ne pas notifier le créateur 2 fois
-        if (otherUser.id !== user.sub) {
-          console.log(` McCart Notification pour user ${otherUser.id}`);
+      for (const assignedUser of assignedUsers) {
+        // Ne pas notifier le créateur s'il est aussi assigné
+        if (assignedUser.id !== user.sub) {
+          console.log(` McCart Notification pour utilisateur assigné ${assignedUser.id}`);
 
           // Récupérer le nom du créateur
           const creator = await this.usersService.findOneById(user.sub);
 
           await this.notificationsService.create(
-            otherUser.id,
+            assignedUser.id,
             task.id,
             NotificationType.TASK_CREATED,
-            '✨ Nouvelle tâche créée',
-            `${creator.username} a créé la tâche "${task.title}". Description: ${task.content}`,
+            '✨ Tâche vous est assignée',
+            `${creator.username} vous a assigné(e) à la tâche "${task.title}". Description: ${task.content}`,
           );
         }
       }
 
-      console.log(`✅ Toutes les notifications créées`);
+      console.log(`✅ Toutes les notifications envoyées`);
     } catch (error) {
       console.error(
-        `❌ Erreur création notifications pour autres users:`,
+        `❌ Erreur création notifications pour les utilisateurs assignés:`,
         error,
       );
       // Ne pas échouer si les notif échouent
@@ -86,6 +97,52 @@ export class TaskService {
     // ============================================================
 
     return task;
+  }
+
+  // Fonction pour assigner des utilisateurs à une tâche
+  async assignUsersToTask(taskId: number, userIds: number[]) {
+    console.log(` McCart Assignation des utilisateurs ${userIds.join(', ')} à la tâche ${taskId}`);
+    
+    // D'abord supprimer les anciennes assignations pour cette tâche
+    await this.taskAssignmentRepository.destroy({
+      where: { taskId }
+    });
+
+    // Créer les nouvelles assignations
+    for (const userId of userIds) {
+      await this.taskAssignmentRepository.create({
+        taskId,
+        userId,
+        role: 'assigned' // Par défaut, tous les utilisateurs sont assignés à la tâche
+      });
+    }
+    
+    console.log(`✅ ${userIds.length} utilisateur(s) assigné(s) à la tâche ${taskId}`);
+  }
+
+  // Fonction pour récupérer les utilisateurs assignés à une tâche
+  async getAssignedUsers(taskId: number) {
+    const assignments = await this.taskAssignmentRepository.findAll({
+      where: { taskId }
+    });
+
+    // Récupérer les utilisateurs séparément
+    const userIds = assignments.map(assignment => assignment.userId);
+    const users = [];
+    
+    for (const userId of userIds) {
+      try {
+        const user = await this.usersService.findOneById(userId);
+        if (user) users.push(user);
+      } catch (error) {
+        console.error(
+          `Erreur lors de la récupération de l'utilisateur ${userId}:`,
+          error,
+        );
+      }
+    }
+    
+    return users;
   }
 
   // ✨ Récupérer toutes les tâches avec pagination
@@ -98,16 +155,61 @@ export class TaskService {
   ) {
     console.log(`📋 Récupération tâches pour user ${user.sub}`);
 
-    const where: any = { userId: user.sub };
-    if (priority) {
-      where.priority = priority;
-    }
-    if (status) {
-      where.status = status;
+    // Récupérer d'abord les tâches appartenant à l'utilisateur
+    const userTaskIds = await this.taskRepository.findAll({
+      where: { userId: user.sub },
+      attributes: ['id'],
+      raw: true
+    }).then(tasks => tasks.map(t => t.id));
+
+    // Récupérer les IDs des tâches où l'utilisateur est assigné
+    const assignedTaskIds = await this.taskAssignmentRepository.findAll({
+      where: { userId: user.sub },
+      attributes: ['taskId'],
+      raw: true
+    }).then(assignments => assignments.map(a => a.taskId));
+
+    // Combiner les IDs des tâches (soit propriétaires, soit assignées)
+    const allTaskIds = [...new Set([...userTaskIds, ...assignedTaskIds])]; // Union avec dédoublonnage
+
+    if (allTaskIds.length === 0) {
+      // Si l'utilisateur n'a ni tâches propres ni tâches assignées, renvoyer une réponse vide
+      return {
+        tasks: [],
+        pagination: {
+          total: 0,
+          limit,
+          offset,
+          page: Math.floor(offset / limit) + 1,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPreviousPage: offset > 0,
+        }
+      };
     }
 
+    // Construire la condition WHERE pour filtrer par ID
+    const whereCondition: any = {
+      id: { [Op.in]: allTaskIds }
+    };
+
+    // Appliquer les filtres additionnels
+    if (priority) {
+      whereCondition.priority = priority;
+    }
+    if (status) {
+      whereCondition.status = status;
+    }
+
+    // Effectuer la requête finale avec pagination
     const { count, rows } = await this.taskRepository.findAndCountAll({
-      where,
+      where: whereCondition,
+      include: [
+        {
+          model: TaskAssignment,
+          required: false,
+        }
+      ],
       order: [['createdAt', 'DESC']],
       limit: Math.max(1, limit),
       offset: Math.max(0, offset),
@@ -133,13 +235,42 @@ export class TaskService {
   async search(user: any, query: string) {
     console.log(`🔍 Recherche : "${query}" pour user ${user.sub}`);
 
+    // Récupérer d'abord les tâches appartenant à l'utilisateur
+    const userTaskIds = await this.taskRepository.findAll({
+      where: { userId: user.sub },
+      attributes: ['id'],
+      raw: true
+    }).then(tasks => tasks.map(t => t.id));
+
+    // Récupérer les IDs des tâches où l'utilisateur est assigné
+    const assignedTaskIds = await this.taskAssignmentRepository.findAll({
+      where: { userId: user.sub },
+      attributes: ['taskId'],
+      raw: true
+    }).then(assignments => assignments.map(a => a.taskId));
+
+    // Combiner les IDs des tâches (soit propriétaires, soit assignées)
+    const allTaskIds = [...new Set([...userTaskIds, ...assignedTaskIds])]; // Union avec dédoublonnage
+
+    if (allTaskIds.length === 0) {
+      // Si l'utilisateur n'a ni tâches propres ni tâches assignées, renvoyer une réponse vide
+      return [];
+    }
+
+    // Filtrer les tâches par titre en utilisant les IDs combinés
     return this.taskRepository.findAll({
       where: {
-        userId: user.sub,
+        id: { [Op.in]: allTaskIds },
         title: {
           [Op.like]: `%${query}%`,
         },
       },
+      include: [
+        {
+          model: TaskAssignment,
+          required: false,
+        }
+      ],
       order: [['createdAt', 'DESC']],
     });
   }
@@ -148,11 +279,36 @@ export class TaskService {
   async findOne(id: number, userId: number) {
     console.log(`📄 Récupération tâche ${id}`);
 
+    // Vérifier si la tâche appartient à l'utilisateur
+    const userTaskIds = await this.taskRepository.findAll({
+      where: { userId },
+      attributes: ['id'],
+      raw: true
+    }).then(tasks => tasks.map(t => t.id));
+
+    // Vérifier si l'utilisateur est assigné à cette tâche
+    const assignedTaskIds = await this.taskAssignmentRepository.findAll({
+      where: { userId },
+      attributes: ['taskId'],
+      raw: true
+    }).then(assignments => assignments.map(a => a.taskId));
+
+    // Combiner les IDs des tâches
+    const allTaskIds = [...new Set([...userTaskIds, ...assignedTaskIds])];
+
+    // Vérifier si la tâche demandée est dans la liste des tâches accessibles
+    if (!allTaskIds.includes(id)) {
+      throw new NotFoundException('Tâche non trouvée');
+    }
+
     const task = await this.taskRepository.findOne({
-      where: {
-        id,
-        userId,
-      },
+      where: { id },
+      include: [
+        {
+          model: TaskAssignment,
+          required: false,
+        }
+      ]
     });
 
     if (!task) {
@@ -278,14 +434,23 @@ export class TaskService {
       console.log(
         `⚠️ Aucune modification détectée pour la tâche ${id}, aucune notification envoyée`,
       );
+      
+      // Mais si les utilisateurs assignés sont modifiés, on met à jour les assignations
+      if (dto.assignedUserIds && Array.isArray(dto.assignedUserIds)) {
+        await this.assignUsersToTask(id, dto.assignedUserIds);
+      }
+      
       return task;
     }
 
-    console.log(
-      `🚀 Des modifications ont été détectées, mise à jour en cours...`,
-    );
+    console.log(`🚀 Des modifications ont été détectées, mise à jour en cours...`);
 
     const updatedTask = await task.update(updateData);
+    
+    // Gérer les assignations d'utilisateurs si elles sont fournies
+    if (dto.assignedUserIds && Array.isArray(dto.assignedUserIds)) {
+      await this.assignUsersToTask(id, dto.assignedUserIds);
+    }
     
     // ============================================================
     // 🔔 NOTIFICATIONS - ENVOYER UNE NOTIFICATION QUAND UNE TÂCHE EST MISE À JOUR
@@ -305,27 +470,27 @@ export class TaskService {
         `Votre tâche "${updatedTask.title}" a été mise à jour. Description: ${updatedTask.content}`,
       );
 
-      // 2️⃣ NOTIFICATIONS POUR TOUS LES AUTRES UTILISATEURS
-      console.log(` McCart Récupération de tous les utilisateurs...`);
-      const allUsers = await this.usersService.findAll();
-      console.log(` McCart ${allUsers.length} utilisateur(s) trouvé(s)`);
+      // 2️⃣ NOTIFICATIONS POUR LES UTILISATEURS ASSIGNÉS
+      console.log(` McCart Récupération des utilisateurs assignés...`);
+      const assignedUsers = await this.getAssignedUsers(id);
+      console.log(` McCart ${assignedUsers.length} utilisateur(s) assigné(s) trouvé(s)`);
 
-      for (const otherUser of allUsers) {
+      for (const assignedUser of assignedUsers) {
         // Ne pas notifier le propriétaire de la tâche 2 fois
-        if (otherUser.id !== userId) {
+        if (assignedUser.id !== userId) {
           console.log(
-            ` McCart Notification mise à jour pour user ${otherUser.id}`,
+            ` McCart Notification mise à jour pour utilisateur assigné ${assignedUser.id}`,
           );
 
           // Récupérer le nom du propriétaire de la tâche
           const owner = await this.usersService.findOneById(userId);
 
           await this.notificationsService.create(
-            otherUser.id,
+            assignedUser.id,
             task.id,
             NotificationType.TASK_UPDATED,
             '✏️ Tâche mise à jour',
-            `${owner.username} a mis à jour la tâche "${updatedTask.title}". Description: ${updatedTask.content}`,
+            `${owner.username} a mis à jour la tâche "${updatedTask.title}" qui vous est assignée. Description: ${updatedTask.content}`,
           );
         }
       }
@@ -353,6 +518,11 @@ export class TaskService {
     // 🔥 supprimer toutes les notifications liées à cette tâche
     await this.notificationsService.deleteByTaskId(id);
 
+    // Supprimer toutes les assignations liées à cette tâche
+    await this.taskAssignmentRepository.destroy({
+      where: { taskId: id }
+    });
+
     // ensuite supprimer la tâche
     return task.destroy();
 }
@@ -362,13 +532,42 @@ export class TaskService {
     console.log(`⏰ Récupération tâches en retard pour user ${userId}`);
 
     const now = new Date();
+
+    // Récupérer d'abord les tâches appartenant à l'utilisateur
+    const userTaskIds = await this.taskRepository.findAll({
+      where: { userId },
+      attributes: ['id'],
+      raw: true
+    }).then(tasks => tasks.map(t => t.id));
+
+    // Récupérer les IDs des tâches où l'utilisateur est assigné
+    const assignedTaskIds = await this.taskAssignmentRepository.findAll({
+      where: { userId },
+      attributes: ['taskId'],
+      raw: true
+    }).then(assignments => assignments.map(a => a.taskId));
+
+    // Combiner les IDs des tâches (soit propriétaires, soit assignées)
+    const allTaskIds = [...new Set([...userTaskIds, ...assignedTaskIds])]; // Union avec dédoublonnage
+
+    if (allTaskIds.length === 0) {
+      // Si l'utilisateur n'a ni tâches propres ni tâches assignées, renvoyer une réponse vide
+      return [];
+    }
+
     return this.taskRepository.findAll({
       where: {
-        userId,
+        id: { [Op.in]: allTaskIds },
         dueDate: {
           [Op.lt]: now,
         },
       },
+      include: [
+        {
+          model: TaskAssignment,
+          required: false,
+        }
+      ],
       order: [['dueDate', 'ASC']],
     });
   }
@@ -380,26 +579,54 @@ export class TaskService {
     const now = new Date();
     const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
+    // Récupérer d'abord les tâches appartenant à l'utilisateur
+    const userTaskIds = await this.taskRepository.findAll({
+      where: { userId },
+      attributes: ['id'],
+      raw: true
+    }).then(tasks => tasks.map(t => t.id));
+
+    // Récupérer les IDs des tâches où l'utilisateur est assigné
+    const assignedTaskIds = await this.taskAssignmentRepository.findAll({
+      where: { userId },
+      attributes: ['taskId'],
+      raw: true
+    }).then(assignments => assignments.map(a => a.taskId));
+
+    // Combiner les IDs des tâches (soit propriétaires, soit assignées)
+    const allTaskIds = [...new Set([...userTaskIds, ...assignedTaskIds])]; // Union avec dédoublonnage
+
+    if (allTaskIds.length === 0) {
+      // Si l'utilisateur n'a ni tâches propres ni tâches assignées, renvoyer une réponse vide
+      return [];
+    }
+
     return this.taskRepository.findAll({
       where: {
-        userId,
+        id: { [Op.in]: allTaskIds },
         dueDate: {
           [Op.between]: [now, tomorrow],
         },
       },
+      include: [
+        {
+          model: TaskAssignment,
+          required: false,
+        }
+      ],
       order: [['dueDate', 'ASC']],
     });
   }
   
-  // ✨ Tâche cron pour mettre à jour les tâches en retard
+  // ✨ Tâche cron pour mettre à jour les tâches expirées
   @Cron(CronExpression.EVERY_HOUR) // Exécute toutes les heures
-  async updateOverdueTasks() {
-    console.log('🔄 Vérification des tâches en retard...');
+  async updateExpiredTasks() {
+    console.log('🔄 Vérification des tâches expirées...');
     
     const now = new Date();
     
-    // Trouver les tâches avec statut Todo ou InProgress qui sont en retard
-    const overdueTasks = await this.taskRepository.findAll({
+    // Trouver les tâches avec statut Todo ou InProgress qui sont expirées
+    const expiredTasks = await this.taskRepository.findAll({
       where: {
         dueDate: {
           [Op.lt]: now,
@@ -409,61 +636,80 @@ export class TaskService {
         }
       }
     });
-
-    for (const task of overdueTasks) {
-      console.log(
-        `🔄 Mise à jour du statut de la tâche ${task.id} à "overdue"...`,
-      );
+    
+    if (expiredTasks.length > 0) {
+      console.log(` McCart ${expiredTasks.length} tâche(s) expirée(s) trouvée(s)`);
       
-      // Mettre à jour le statut de la tâche à "pending" pour indiquer qu'elle est en retard
-      await task.update({ status: TaskStatus.PENDING });
-      
-      // Créer une notification pour informer l'utilisateur
-      await this.notificationsService.create(
-        task.userId,
-        task.id,
-        NotificationType.TASK_OVERDUE,
-        '⏰ Tâche en retard',
-        `La tâche "${task.title}" est en retard. Date d'échéance: ${task.dueDate}`
-      );
-    }
-    
-    console.log(`✅ ${overdueTasks.length} tâches potentiellement mises à jour.`);
-  }
-  
-  // ✨ Tâche cron pour envoyer des notifications pour les tâches proches de leur échéance
-  @Cron(CronExpression.EVERY_30_MINUTES) // Exécute toutes les 30 minutes
-  async notifyUpcomingDeadlines() {
-    console.log('🔔 Vérification des tâches avec échéance proche...');
-    
-    const now = new Date();
-    const inTwoHours = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 heures à partir de maintenant
-    
-    // Trouver les tâches qui arriveront à échéance dans les prochaines 2 heures
-    const upcomingTasks = await this.taskRepository.findAll({
-      where: {
-        dueDate: {
-          [Op.between]: [now, inTwoHours],
-        },
-        status: {
-          [Op.ne]: TaskStatus.COMPLETED // Ne pas notifier pour les tâches déjà terminées
+      for (const task of expiredTasks) {
+        try {
+          // Mettre à jour le statut de la tâche à "EXPIRED"
+          await task.update({ status: TaskStatus.EXPIRED });
+          
+          console.log(` McCart Tâche ${task.id} mise à jour au statut EXPIRED`);
+          
+          // Envoyer des notifications aux utilisateurs concernés
+          await this.sendExpirationNotification(task);
+          
+        } catch (error) {
+          console.error(`❌ Erreur lors de la mise à jour de la tâche ${task.id}:`, error);
         }
       }
-    });
-
-    for (const task of upcomingTasks) {
-      console.log(`🔔 Envoi d'une notification pour la tâche ${task.id} avec échéance imminente...`);
       
-      // Créer une notification pour informer l'utilisateur
+      console.log(`✅ ${expiredTasks.length} tâche(s) expirée(s) mise(s) à jour`);
+    } else {
+      console.log(' McCart Aucune tâche expirée trouvée');
+    }
+  }
+  
+  // ✨ Envoyer des notifications pour une tâche expirée
+  private async sendExpirationNotification(task: Task) {
+    console.log(` McCart Envoi de notifications pour la tâche expirée ${task.id}`);
+    
+    try {
+      // 1️⃣ NOTIFICATION POUR LE PROPRIÉTAIRE DE LA TÂCHE
+      console.log(
+        ` McCart Notification expiration pour propriétaire (user ${task.userId})`,
+      );
       await this.notificationsService.create(
         task.userId,
         task.id,
-        NotificationType.TASK_DEADLINE_APPROACHING,
-        '⏰ Échéance imminente',
-        `La tâche "${task.title}" arrive à échéance dans moins de 2 heures: ${task.dueDate}`
+        NotificationType.TASK_EXPIRED,
+        '⏰ Tâche expirée',
+        `Votre tâche "${task.title}" a expiré sans être complétée. Statut mis à jour à "Expiré".`,
       );
+
+      // 2️⃣ NOTIFICATIONS POUR LES UTILISATEURS ASSIGNÉS
+      console.log(` McCart Récupération des utilisateurs assignés...`);
+      const assignedUsers = await this.getAssignedUsers(task.id);
+      console.log(` McCart ${assignedUsers.length} utilisateur(s) assigné(s) trouvé(s)`);
+
+      for (const assignedUser of assignedUsers) {
+        // Ne pas notifier le propriétaire de la tâche 2 fois
+        if (assignedUser.id !== task.userId) {
+          console.log(
+            ` McCart Notification expiration pour utilisateur assigné ${assignedUser.id}`,
+          );
+
+          // Récupérer le nom du propriétaire de la tâche
+          const owner = await this.usersService.findOneById(task.userId);
+
+          await this.notificationsService.create(
+            assignedUser.id,
+            task.id,
+            NotificationType.TASK_EXPIRED,
+            '⏰ Tâche expirée',
+            `${owner.username} n'a pas complété la tâche "${task.title}" qui vous est assignée avant la date d'échéance.`,
+          );
+        }
+      }
+
+      console.log(`✅ Toutes les notifications d'expiration envoyées pour la tâche ${task.id}`);
+    } catch (error) {
+      console.error(
+        `❌ Erreur envoi notifications d'expiration pour la tâche ${task.id}:`,
+        error,
+      );
+      // Ne pas échouer si les notifications échouent
     }
-    
-    console.log(`✅ ${upcomingTasks.length} notifications potentiellement envoyées.`);
   }
 }

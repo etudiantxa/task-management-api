@@ -8,6 +8,7 @@ export enum NotificationType {
   TASK_DELETED = 'TASK_DELETED',
   TASK_OVERDUE = 'TASK_OVERDUE',
   TASK_DEADLINE_APPROACHING = 'TASK_DEADLINE_APPROACHING',
+  TASK_EXPIRED = 'TASK_EXPIRED',
 }
 
 @Injectable()
@@ -48,24 +49,6 @@ export class NotificationsService {
     });
   }
 
-  // ✨ Récupérer une notification
-  async findOne(id: number, userId: number) {
-    console.log(`📄 Récupération notification ${id}`);
-
-    const notification = await this.notificationRepository.findOne({
-      where: {
-        id,
-        userId,
-      },
-    });
-    
-    if (!notification) {
-      throw new NotFoundException('Notification not found');
-    }
-    
-    return notification;
-  }
-
   // ✨ Récupérer les notifications non lues d'un utilisateur
   async findUnread(userId: number) {
     console.log(`📋 Récupération notifications non lues pour user ${userId}`);
@@ -76,6 +59,34 @@ export class NotificationsService {
     });
   }
 
+  // ✨ Marquer toutes les notifications comme lues pour un utilisateur
+  async markAllAsRead(userId: number) {
+    console.log(` McCart Marquage de toutes les notifications comme lues pour user ${userId}`);
+
+    return this.notificationRepository.update(
+      { isRead: true, readAt: new Date() },
+      { where: { userId, isRead: false } }
+    );
+  }
+
+  // ✨ Récupérer une notification
+  async findOne(id: number, userId: number) {
+    console.log(`📄 Récupération notification ${id}`);
+
+    const notification = await this.notificationRepository.findOne({
+      where: {
+        id,
+        userId,
+      },
+    });
+
+    if (!notification) {
+      throw new NotFoundException('Notification non trouvée');
+    }
+
+    return notification;
+  }
+
   // ✨ Marquer une notification comme lue
   async markAsRead(id: number, userId: number) {
     console.log(`👁️ Marquage notification ${id} comme lue`);
@@ -84,39 +95,29 @@ export class NotificationsService {
     return notification.update({ isRead: true });
   }
 
-  // ✨ Marquer toutes les notifications comme lues
-  async markAllAsRead(userId: number) {
-    console.log(`👁️ Marquage de toutes les notifications comme lues pour user ${userId}`);
-
-    return this.notificationRepository.update(
-      { isRead: true },
-      { where: { userId } },
-    );
-  }
-
-  // ✨ Nombre de notifications non lues
-  async countUnread(userId: number) {
-    console.log(`🔢 Comptage notifications non lues pour user ${userId}`);
-
-    return this.notificationRepository.count({
-      where: { userId, isRead: false },
-    });
-  }
-
   // ✨ Supprimer une notification
   async remove(id: number, userId: number) {
-    console.log(` McCart Suppression notification ${id}`);
+    console.log(`🗑️ Suppression notification ${id}`);
 
     const notification = await this.findOne(id, userId);
     return notification.destroy();
   }
 
-  // ✨ Supprimer les notifications liées à une tâche
+  // ✨ Supprimer toutes les notifications d'une tâche
   async deleteByTaskId(taskId: number) {
-    console.log(` McCart Suppression notifications pour tâche ${taskId}`);
+    console.log(` McCart Suppression notifications pour la tâche ${taskId}`);
 
     return this.notificationRepository.destroy({
       where: { taskId },
+    });
+  }
+
+  // ✨ Compter les notifications non lues
+  async countUnread(userId: number) {
+    console.log(`🔢 Comptage notifications non lues pour user ${userId}`);
+
+    return this.notificationRepository.count({
+      where: { userId, isRead: false },
     });
   }
 }

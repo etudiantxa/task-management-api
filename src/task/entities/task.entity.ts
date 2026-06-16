@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Column, Table, Model, DataType } from 'sequelize-typescript';
+import { Column, Table, Model, DataType, HasMany } from 'sequelize-typescript';
+import { TaskAssignment } from './task-assignment.entity';
 
 export enum TaskStatus {
   TODO = 'todo',
@@ -7,6 +8,7 @@ export enum TaskStatus {
   COMPLETED = 'completed',
   PENDING = 'pending',
   CANCELLED = 'cancelled',
+  EXPIRED = 'expired',
 }
 
 @Table({ tableName: 'tasks' })
@@ -93,4 +95,8 @@ export class Task extends Model {
     defaultValue: 1,
   })
   userId?: number;
+
+  // Relation avec les utilisateurs assignés à cette tâche
+  @HasMany(() => TaskAssignment)
+  assignments?: TaskAssignment[];
 }
